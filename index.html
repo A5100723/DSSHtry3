@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>鐵鏽與陽光：帝國轉向</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #202b36;
+      color: #ffffff;
+      padding: 20px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { color: #f1c40f; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    p { color: #a4b0be; margin-top: 0; }
+    #dashboard {
+      background-color: #2f3542;
+      padding: 15px 30px;
+      border-radius: 10px;
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      display: flex;
+      gap: 40px;
+      border: 1px solid #57606f;
+    }
+    .text-good { color: #2ed573; }
+    .text-bad { color: #ff4757; }
+    .text-warn { color: #ffa502; }
+    
+    #game-container { display: flex; gap: 20px; width: 100%; max-width: 900px; }
+    .region { flex: 1; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    #rust-belt { background-color: #57606f; border: 3px solid #747d8c; }
+    #sun-belt { background-color: #d35400; border: 3px solid #e67e22; }
+    
+    .region h2 { margin-top: 0; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
+    .stats { font-size: 18px; margin-bottom: 20px; height: 70px; line-height: 1.5; }
+    
+    button {
+      background-color: #1e90ff;
+      color: white;
+      border: none;
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.2s;
+      width: 100%;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    button:hover { background-color: #3742fa; }
+    button:disabled { background-color: #747d8c; cursor: not-allowed; opacity: 0.5; }
+    
+    .btn-remove { background-color: #ffa502; }
+    .btn-remove:hover { background-color: #ff7f50; }
+    .btn-tech { background-color: #9b59b6; }
+    .btn-tech:hover { background-color: #8e44ad; }
+    
+    #log-container {
+      margin-top: 20px;
+      width: 100%;
+      max-width: 900px;
+      background-color: #11141a;
+      padding: 15px;
+      border-radius: 8px;
+      height: 180px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 14px;
+      border: 1px solid #2f3542;
+    }
+    .log-line { margin-bottom: 5px; color: #ced6e0; }
+    .log-ev { color: #f1c40f; font-weight: bold; }
+    .log-danger { color: #ff4757; font-weight: bold; }
+    .log-sucess { color: #2ed573; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h1>🏭 鐵鏽與陽光：帝國轉向 ☀️</h1>
+  <p>⚙️ 遊戲設定：每 10 秒推進一年。拆除工廠需面臨「工業慣性」付出加倍代價！</p>
+
+  <div id="dashboard">
+    <div>年份：<span id="ui-year" class="text-good">1950</span></div>
+    <div>企業資金：$<span id="ui-funds" class="text-good">1000</span></div>
+    <div>每年淨利：$<span id="ui-profit">0</span></div>
+  </div>
+
+  <div id="game-container">
+    <div id="rust-belt" class="region">
+      <h2>❄️ 五大湖區 (未來鐵鏽帶)</h2>
+      <div class="stats">
+        工廠數量：<span id="rust-fac">0</span> 座<br>
+        區域狀態：<span id="rust-status" class="text-good">聚集經濟效益高，發展蓬勃</span>
+      </div>
+      <button onclick="handleFactory('rust', 'build')"> invest 投資建廠 ($200)</button>
+      <button class="btn-remove" onclick="handleFactory('rust', 'remove')">🔥 拆除廠房 (加倍花費 $400)</button>
+    </div>
+
+    <div id="sun-belt" class="region">
+      <h2>☀️ 南方陽光帶</h2>
+      <div class="stats">
+        工廠數量：<span id="sun-fac">0</span> 座<br>
+        區域狀態：<span id="sun-status" class="text-warn">氣候極度炎熱，缺乏基礎建設</span>
+      </div>
+      <button onclick="handleFactory('sun', 'build')"> invest 投資建廠 ($300)</button>
+      <button class="btn-remove" onclick="handleFactory('sun', 'remove')">🔥 拆除廠房 (加倍花費 $600)</button>
+      <button id="btn-tech-ac" class="btn-tech" onclick="buyTech('ac')">🔧 研發：大型商用空調 ($500)</button>
+      <button id="btn-tech-hi" class="btn-tech" onclick="buyTech('highTech')" style="display:none;">🚀 研發：高科技產業轉型 ($1000)</button>
+    </div>
+  </div>
+
+  <div id="log-container" id="log-box"></div>
+
+  <script>
+    // 遊戲數據
+    let game = {
+      year: 1950,
+      funds: 1000,
+      rustFac: 0,
+      sunFac: 0,
+      hasAC: false,
+      hasHighTech: false,
+      foreignComp: false,
+      isOver: false
+    };
+
+    const triggered = new Set();
+
+    function log(msg, type = "normal") {
+      const box = document.getElementById('log-container');
+      const div = document.createElement('div');
+      div.className = "log-line";
+      if(type === "ev") div.className += " log-ev";
+      if(type === "bad") div.className += " log-danger";
+      if(type === "good") div.className += " log-sucess";
+      div.innerText = `[${game.year}年] ${msg}`;
+      box.insertBefore(div, box.firstChild);
+    }
+
+    // 處理增減工廠
+    window.handleFactory = function(region, action) {
+      if (game.isOver) return;
+
+      if (region === 'rust') {
+        if (action === 'build') {
+          if (game.funds < 200) return alert("資金不足！建廠需要 $200");
+          game.funds -= 200;
+          game.rustFac++;
+          log("在五大湖區擴建了一座重工業廠房。");
+        } else {
+          if (game.rustFac <= 0) return alert("該地區已經沒有工廠可以拆除！");
+          if (game.funds < 400) return alert("資金不足！拆除老舊廠房與安置勞工需加倍花費 $400");
+          game.funds -= 400;
+          game.rustFac--;
+          log("強制拆除五大湖區廠房，付出了高昂的解雇與環境整治代價！", "bad");
+        }
+      } else {
+        if (action === 'build') {
+          if (!game.hasAC) return alert("南方氣候過於炎熱，在研發出「大型商用空調」前，工人拒絕上工！");
+          if (game.funds < 300) return alert("資金不足！南方建廠需要 $300");
+          game.funds -= 300;
+          game.sunFac++;
+          log("在陽光帶建立了一座新式現代化廠房。");
+        } else {
+          if (game.sunFac <= 0) return alert("該地區已經沒有工廠可以拆除！");
+          if (game.funds < 600) return alert("資金不足！拆除南方廠房需要違約與搬遷費 $600");
+          game.funds -= 600;
+          game.sunFac--;
+          log("撤走陽光帶的資本，拆除廠房損失了 $600。", "bad");
+        }
+      }
+      updateDisplay();
+    };
+
+    // 研發科技
+    window.buyTech = function(tech) {
+      if (game.isOver) return;
+      if (tech === 'ac') {
+        if (game.year < 1955) return alert("時代技術尚未成熟，1955年後才可研發。");
+        if (game.funds < 500) return alert("研發資金不足 ($500)！");
+        game.funds -= 500;
+        game.hasAC = true;
+        document.getElementById('btn-tech-ac').style.display = 'none';
+        document.getElementById('sun-status').innerText = "空調普及，製造業與人口瘋狂移入！";
+        document.getElementById('sun-status').className = "text-good";
+        log("成功研發大型商用空調！南方的環境劣勢轉化為拉力！", "good");
+      } else {
+        if (game.year < 1985) return alert("尚未進入資訊時代，科技樹未解鎖。");
+        if (game.funds < 1000) return alert("轉型資金不足 ($1000)！");
+        game.funds -= 1000;
+        game.hasHighTech = true;
+        document.getElementById('btn-tech-hi').style.display = 'none';
+        document.getElementById('sun-status').innerText = "高科技與新興矽谷核心，利潤極其龐大！";
+        log("核心產業成功轉型高科技與軟體業！你避開了傳統製造業的衰退！", "good");
+      }
+      updateDisplay();
+    };
+
+    function getProfit() {
+      let rustRate = 50;
+      let sunRate = 40;
+
+      // 鐵鏽帶利潤演變
+      if (game.year >= 1960) rustRate = 60;
+      if (game.year >= 1970) rustRate = 10;  // 石油危機
+      if (game.year >= 1980) rustRate = -15; // 亞洲競爭
+      if (game.year >= 1990) rustRate = -40; // 工業慣性深重虧損
+
+      // 陽光帶利潤演變
+      if (game.year >= 1960) sunRate += 10;
+      if (game.hasAC) sunRate += 20;
+      if (game.year >= 1980) sunRate += 20;
+      if (game.foreignComp) sunRate -= 25; // 外資突發事件減益
+      if (game.hasHighTech && game.year >= 1990) sunRate = 190; // 高科技紅利
+
+      let profit = (game.rustFac * rustRate) + (game.sunFac * sunRate);
+      // 早期聚集經濟加成
+      if (game.rustFac >= 3 && game.year < 1970) profit += 60;
+      return profit;
+    }
+
+    function checkTimeline() {
+      if (game.year === 1960 && !triggered.has(1960)) {
+        triggered.add(1960);
+        log("【歷史事件】聖羅倫斯航道開通，五大湖黃金期達到巔峰！同時聯邦公路法案通過，南方基礎建設動工。", "good");
+      }
+      if (game.year === 1970 && !triggered.has(1970)) {
+        triggered.add(1970);
+        log("【歷史事件】石油危機爆發！強勢工會發動抗爭，五大湖區成本飆升，推力浮現！", "bad");
+        document.getElementById('rust-status').innerText = "工會抗爭頻繁，營運成本高昂";
+        document.getElementById('rust-status').className = "text-warn";
+      }
+      // 1. 新增難度：1975年環保法規
+      if (game.year === 1975 && !triggered.has(1975)) {
+        triggered.add(1975);
+        let cost = game.rustFac * 150;
+        game.funds -= cost;
+        log(`【突發難度】政府無預警頒布《潔淨空氣法案》！鐵鏽帶每座舊工廠被強制課徵環保升級費，共損失 $${cost}！`, "bad");
+      }
+      if (game.year === 1980 && !triggered.has(1980)) {
+        triggered.add(1980);
+        log("【歷史事件】日本與亞洲廉價鋼鐵、汽車傾銷！北美重工業競爭力崩潰，「鐵鏽帶」正式成形！", "bad");
+        document.getElementById('rust-status').innerText = "海外鋼鐵傾銷，工廠陷入虧損狀態";
+        document.getElementById('rust-status').className = "text-bad";
+      }
+      if (game.year === 1985 && !triggered.has(1985)) {
+        triggered.add(1985);
+        log("【歷史科技】矽谷與德州微處理器興起，陽光帶開放「高科技產業轉型」研發！", "ev");
+        document.getElementById('btn-tech-hi').style.style.display = 'block';
+      }
+      // 2. 新增難度：1995年外資競爭
+      if (game.year === 1995 && !triggered.has(1995)) {
+        triggered.add(1995);
+        game.foreignComp = true;
+        log("【突發難度】海外跨國集團盯上陽光帶的低稅率，大舉進駐設廠！傳統製造業競爭白熱化，利潤遭到嚴重稀釋！", "bad");
+        if(!game.hasHighTech) {
+          document.getElementById('sun-status').innerText = "外資低價競爭，利潤大幅下滑";
+          document.getElementById('sun-status').className = "text-warn";
+        }
+      }
+    }
+
+    function updateDisplay() {
+      document.getElementById('rust-fac').innerText = game.rustFac;
+      document.getElementById('sun-fac').innerText = game.sunFac;
+      document.getElementById('ui-year').innerText = game.year;
+      document.getElementById('ui-funds').innerText = game.funds;
+      
+      let p = getProfit();
+      const profEl = document.getElementById('ui-profit');
+      profEl.innerText = p;
+      profEl.className = p >= 0 ? "text-good" : "text-bad";
+    }
+
+    // 初始化
+    log("遊戲開始！1950年戰後黃金年代，東北五大湖重工業擁有絕對的聚集經濟優勢。", "good");
+    updateDisplay();
+
+    // 遊戲主迴圈：嚴格設定 10 秒 (10000 毫秒) 走一年
+    const loop = setInterval(() => {
+      if (game.isOver) return;
+
+      game.year++;
+      checkTimeline();
+      game.funds += getProfit();
+      updateDisplay();
+
+      if (game.funds < 0) {
+        game.isOver = true;
+        log("企業資金鏈斷裂，宣布破產！你未能成功在歷史洪流中完成轉型...", "bad");
+        alert("【遊戲結束】你破產了！點除舊工廠的巨額成本與時代的推力將你吞噬。");
+        clearInterval(loop);
+      }
+
+      if (game.year >= 2020) {
+        game.isOver = true;
+        log(`【順利通關】抵達2020年！最終企業總資產：$${game.funds}`, "good");
+        alert(`【恭喜通關！】你成功活到了 2020 年！最終資產為 $${game.funds}。你成功克服了工業慣性，完成了偉大的帝國轉向！`);
+        clearInterval(loop);
+      }
+    }, 10000);
+  </script>
+</body>
+</html>
